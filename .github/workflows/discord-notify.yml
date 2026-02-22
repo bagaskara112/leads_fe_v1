@@ -1,0 +1,155 @@
+name: "🔔 Discord Notifications"
+
+on:
+  push:
+    branches: ["main"]
+
+concurrency:
+  group: discord-${{ github.event_name }}-${{ github.ref || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  notify:
+    name: "📨 Send Notification"
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    timeout-minutes: 2
+
+    steps:
+      - name: "🔔 Discord Notification"
+        uses: actions/github-script@v7
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        with:
+          script: |
+            if (!process.env.DISCORD_WEBHOOK_URL) {
+              core.warning("⚠️ DISCORD_WEBHOOK_URL secret is not configured. Skipping notification.");
+              return;
+            }
+
+            const repo = context.repo;
+            const repoFullName = `${repo.owner}/${repo.repo}`;
+            const repoUrl = `https://github.com/${repoFullName}`;
+            const sender = context.payload.sender;
+
+            const Colors = {
+              success: 0x57F287,
+              info:    0x5865F2,
+            };
+
+            const Icons = {
+              push:   "🚀",
+              stats:  "📊",
+              link:   "🔗",
+            };
+
+            const truncate = (str, len = 200) => {
+              if (!str) return "_No description_";
+              return str.length > len ? str.substring(0, len) + "…" : str;
+            };
+
+            const timestamp = () => new Date().toLocaleString("id-ID", {
+              timeZone: "Asia/Jakarta",
+              day: "2-digit", month: "short", year: "numeric",
+              hour: "2-digit", minute: "2-digit", second: "2-digit"
+            });
+
+            const branchName = (ref) => ref ? ref.replace("refs/heads/", "").replace("refs/tags/", "") : "unknown";
+            const ownerAvatar = context.payload.repository?.owner?.avatar_url || "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png";
+
+            let embed = {
+              color: Colors.info,
+              author: {
+                name: `📦 ${repoFullName}`,
+                url: repoUrl,
+                icon_url: ownerAvatar
+              },
+              footer: {
+                text: `👤 Triggered by ${sender.login} • ${timestamp()}`,
+                icon_url: sender?.avatar_url
+              },
+              timestamp: new Date().toISOString()
+            };
+
+            // --- Push to main ---
+            const commits = context.payload.commits || [];
+            const headCommit = context.payload.head_commit;
+            if (!headCommit) { console.log("No commit data, skipping."); return; }
+
+            const branch = branchName(context.ref);
+            const totalCommits = commits.length;
+            const isMulti = totalCommits > 1;
+
+            const commitList = commits.slice(0, 8).map(c =>
+              `[\`${c.id.substring(0, 7)}\`](${c.url}) ${truncate(c.message.split('\n')[0], 50)} — *${c.author.name}*`
+            ).join("\n");
+            const overflow = totalCommits > 8 ? `\n*...and ${totalCommits - 8} more commits*` : "";
+
+            embed.title = `${Icons.push} ${isMulti ? `${totalCommits} Commits` : "New Push"} to \`${branch}\``;
+            embed.url = isMulti ? context.payload.compare : headCommit.url;
+            embed.color = Colors.info;
+            embed.thumbnail = { url: sender?.avatar_url };
+
+            embed.description = [
+              `**Pushed by** [${headCommit.author.name}](https://github.com/${headCommit.author.username || sender?.login})`,
+              "",
+              "**Commits:**",
+              commitList + overflow
+            ].join("\n");
+
+            embed.fields = [
+              {
+                name: `${Icons.stats} Push Type`,
+                value: context.payload.forced ? "Force Push ⚠️" : (isMulti ? `${totalCommits} Commits` : "Single Commit"),
+                inline: true
+              },
+              {
+                name: `${Icons.link} Quick Links`,
+                value: `[View Diff](${context.payload.compare}) • [Branch](${repoUrl}/tree/${branch})`,
+                inline: true
+              }
+            ];
+
+            // --- Send to Discord ---
+            const payload = {
+              username: "Github_Notifier",
+              avatar_url: "https://awpbjuuervegpfdunuui.supabase.co/storage/v1/object/public/images/produk/BRANDING.png",
+              embeds: [embed]
+            };
+
+            const maxRetries = 3;
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+              try {
+                const response = await fetch(process.env.DISCORD_WEBHOOK_URL, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                  console.log(`✅ Discord notification sent (attempt ${attempt})`);
+                  break;
+                }
+
+                if (response.status === 429) {
+                  const retryAfter = response.headers.get("retry-after");
+                  const waitMs = retryAfter ? parseInt(retryAfter) * 1000 : 5000;
+                  core.warning(`Rate limited. Retrying in ${waitMs}ms...`);
+                  await new Promise(r => setTimeout(r, waitMs));
+                  continue;
+                }
+
+                const errorText = await response.text();
+                core.warning(`Discord API error (${response.status}): ${errorText}`);
+
+                if (attempt === maxRetries) {
+                  core.setFailed(`Failed to send Discord notification after ${maxRetries} attempts.`);
+                }
+              } catch (err) {
+                core.warning(`Attempt ${attempt} failed: ${err.message}`);
+                if (attempt === maxRetries) {
+                  core.setFailed(`Network error after ${maxRetries} attempts: ${err.message}`);
+                }
+                await new Promise(r => setTimeout(r, 2000 * attempt));
+              }
+            }
