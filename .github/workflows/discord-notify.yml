@@ -3,6 +3,7 @@ name: "🔔 Discord Notifications"
 on:
   push:
     branches: ["main"]
+  deployment_status:
 
 concurrency:
   group: discord-${{ github.event_name }}-${{ github.ref || github.sha }}
@@ -71,44 +72,63 @@ jobs:
               timestamp: new Date().toISOString()
             };
 
-            // --- Push to main ---
-            const commits = context.payload.commits || [];
-            const headCommit = context.payload.head_commit;
-            if (!headCommit) { console.log("No commit data, skipping."); return; }
-
-            const branch = branchName(context.ref);
-            const totalCommits = commits.length;
-            const isMulti = totalCommits > 1;
-
-            const commitList = commits.slice(0, 8).map(c =>
-              `[\`${c.id.substring(0, 7)}\`](${c.url}) ${truncate(c.message.split('\n')[0], 50)} — *${c.author.name}*`
-            ).join("\n");
-            const overflow = totalCommits > 8 ? `\n*...and ${totalCommits - 8} more commits*` : "";
-
-            embed.title = `${Icons.push} ${isMulti ? `${totalCommits} Commits` : "New Push"} to \`${branch}\``;
-            embed.url = isMulti ? context.payload.compare : headCommit.url;
-            embed.color = Colors.info;
-            embed.thumbnail = { url: sender?.avatar_url };
-
-            embed.description = [
-              `**Pushed by** [${headCommit.author.name}](https://github.com/${headCommit.author.username || sender?.login})`,
-              "",
-              "**Commits:**",
-              commitList + overflow
-            ].join("\n");
-
-            embed.fields = [
-              {
-                name: `${Icons.stats} Push Type`,
-                value: context.payload.forced ? "Force Push ⚠️" : (isMulti ? `${totalCommits} Commits` : "Single Commit"),
-                inline: true
-              },
-              {
-                name: `${Icons.link} Quick Links`,
-                value: `[View Diff](${context.payload.compare}) • [Branch](${repoUrl}/tree/${branch})`,
-                inline: true
+            // --- Event Logic ---
+            if (context.eventName === 'deployment_status') {
+              const status = context.payload.deployment_status;
+              const deploy = context.payload.deployment;
+              
+              if (status.state !== 'success') {
+                console.log("Deployment state is not 'success', skipping.");
+                return;
               }
-            ];
+
+              embed.title = `✅ Vercel Deployment Successful!`;
+              embed.url = status.target_url;
+              embed.description = `**Project:** ${repoFullName}\n**Environment:** \`${deploy.environment}\`\n\n[▶️ View Live Deployment](${status.target_url})`;
+              embed.color = Colors.success;
+              embed.thumbnail = { url: "https://assets.vercel.com/image/upload/q_auto/front/favicon/vercel/180x180.png" };
+            } else if (context.eventName === 'push') {
+              const commits = context.payload.commits || [];
+              const headCommit = context.payload.head_commit;
+              if (!headCommit) { console.log("No commit data, skipping."); return; }
+
+              const branch = branchName(context.ref);
+              const totalCommits = commits.length;
+              const isMulti = totalCommits > 1;
+
+              const commitList = commits.slice(0, 8).map(c =>
+                `[\`${c.id.substring(0, 7)}\`](${c.url}) ${truncate(c.message.split('\n')[0], 50)} — *${c.author.name}*`
+              ).join("\n");
+              const overflow = totalCommits > 8 ? `\n*...and ${totalCommits - 8} more commits*` : "";
+
+              embed.title = `${Icons.push} ${isMulti ? `${totalCommits} Commits` : "New Push"} to \`${branch}\``;
+              embed.url = isMulti ? context.payload.compare : headCommit.url;
+              embed.color = Colors.info;
+              embed.thumbnail = { url: sender?.avatar_url };
+
+              embed.description = [
+                `**Pushed by** [${headCommit.author.name}](https://github.com/${headCommit.author.username || sender?.login})`,
+                "",
+                "**Commits:**",
+                commitList + overflow
+              ].join("\n");
+
+              embed.fields = [
+                {
+                  name: `${Icons.stats} Push Type`,
+                  value: context.payload.forced ? "Force Push ⚠️" : (isMulti ? `${totalCommits} Commits` : "Single Commit"),
+                  inline: true
+                },
+                {
+                  name: `${Icons.link} Quick Links`,
+                  value: `[View Diff](${context.payload.compare}) • [Branch](${repoUrl}/tree/${branch})`,
+                  inline: true
+                }
+              ];
+            } else {
+              console.log("Unhandled event type:", context.eventName);
+              return;
+            }
 
             // --- Send to Discord ---
             const payload = {
