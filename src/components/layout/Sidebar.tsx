@@ -5,7 +5,6 @@ import {
   UserCircle,
   ChevronLeft,
   ChevronRight,
-  MapPin,
   ClipboardList,
 } from "lucide-react";
 import { useUser } from "../../hooks/useUser";
@@ -30,10 +29,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <aside className={`sidebar ${collapsed ? "sidebar--collapsed" : ""}`}>
       {/* Brand */}
       <div className="sidebar__brand">
-        <div className="sidebar__brand-icon">
-          <MapPin size={20} />
-        </div>
-        <span className="sidebar__brand-text">Pemetaan</span>
+        <img
+          src="/logo.png"
+          alt="ScoutLeads"
+          style={{ width: 32, height: 32, borderRadius: 8 }}
+        />
+        <span className="sidebar__brand-text">ScoutLeads</span>
       </div>
 
       {/* Navigation */}

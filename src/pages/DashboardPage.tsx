@@ -12,7 +12,6 @@ import {
   X,
   Trash2,
   RefreshCw,
-  Download,
   Star,
   MapPin,
   Building2,
@@ -29,7 +28,6 @@ import ConfirmModal from "../components/ui/ConfirmModal";
 import toast from "react-hot-toast";
 import type { CleanLead, RawResponse, User, GooglePlaceResult } from "../types";
 
-// ─── Helpers ──────────────────────────────────────────────
 const formatDate = (date: string | undefined) =>
   date
     ? new Date(date).toLocaleDateString("id-ID", {
@@ -44,7 +42,6 @@ const formatDate = (date: string | undefined) =>
 const getRatingClass = (r: number) =>
   r >= 4 ? "rating--high" : r >= 3 ? "rating--mid" : "rating--low";
 
-// ─── Component ────────────────────────────────────────────
 export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { data: currentUser } = useUser();
@@ -54,7 +51,6 @@ export default function DashboardPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewResponse, setViewResponse] = useState<RawResponse | null>(null);
 
-  // ─── Queries ──────────────────────────────────────────
   const { data: allLeads = [], isLoading: leadsLoading } = useQuery({
     queryKey: ["leads"],
     queryFn: async () => {
@@ -80,8 +76,6 @@ export default function DashboardPage() {
     enabled: isAdmin,
   });
 
-  // ─── Mutations ────────────────────────────────────────
-  // Wajib 1: POST /response/create (Admin only)
   const searchMutation = useMutation({
     mutationFn: (prompt: string) => api.post("/response/create", { prompt }),
     onSuccess: () => {
@@ -95,7 +89,6 @@ export default function DashboardPage() {
     onError: (err) => toast.error(getErrorMessage(err, "Pencarian gagal")),
   });
 
-  // Tahap 1.5 (Fallback): POST /response_clean/clean/{{response_id}}
   const generateCleanMutation = useMutation({
     mutationFn: (responseId: string) =>
       api.post(`/response_clean/clean/${responseId}`),
@@ -108,7 +101,6 @@ export default function DashboardPage() {
     onError: (err) => toast.error(getErrorMessage(err, "Gagal generate clean")),
   });
 
-  // Wajib 7: DELETE /response/delete/{{uuid}} (Admin only)
   const deleteMutation = useMutation({
     mutationFn: (uuid: string) => api.delete(`/response/delete/${uuid}`),
     onSuccess: () => {
@@ -128,7 +120,6 @@ export default function DashboardPage() {
     searchMutation.mutate(keyword.trim());
   };
 
-  // Wajib 5: Export CSV (Admin only)
   const handleExport = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -152,7 +143,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Sorted responses by date
   const sortedResponses = [...allResponses].sort(
     (a, b) =>
       new Date(b.created_at ?? 0).getTime() -
@@ -162,7 +152,6 @@ export default function DashboardPage() {
   const isLoading =
     leadsLoading || responsesLoading || (isAdmin && usersLoading);
 
-  // Detail: get results from viewed response
   const viewResults: GooglePlaceResult[] =
     viewResponse?.response?.results ?? [];
 
@@ -180,13 +169,7 @@ export default function DashboardPage() {
               : "Ringkasan aktivitas & riwayat pencarian"}
           </p>
         </div>
-        <div className="page-header__actions">
-          {isAdmin && (
-            <button className="btn btn--success" onClick={handleExport}>
-              <Download size={16} /> Export CSV
-            </button>
-          )}
-        </div>
+        <div className="page-header__actions"></div>
       </div>
 
       {/* ─── Stat Cards ──────────────────────────────────── */}
@@ -235,11 +218,10 @@ export default function DashboardPage() {
         </Link>
 
         {isAdmin && (
-          <a
-            href={`${import.meta.env.VITE_API_URL}/response_clean/export/csv`}
+          <button
             className="quick-action"
-            target="_blank"
-            rel="noopener noreferrer"
+            onClick={handleExport}
+            style={{ cursor: "pointer", textAlign: "left" }}
           >
             <div className="quick-action__icon stat-card__icon--orange">
               <FileDown size={20} />
@@ -252,7 +234,7 @@ export default function DashboardPage() {
               size={16}
               style={{ marginLeft: "auto", color: "var(--text-tertiary)" }}
             />
-          </a>
+          </button>
         )}
       </div>
 

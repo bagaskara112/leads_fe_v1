@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { LogOut, Sun, Moon } from "lucide-react";
 import { useUser } from "../../hooks/useUser";
+import { useTheme } from "../../hooks/useTheme";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
@@ -13,6 +14,7 @@ export default function Navbar({ collapsed, title }: NavbarProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: user } = useUser();
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -37,6 +39,15 @@ export default function Navbar({ collapsed, title }: NavbarProps) {
     <header className={`navbar ${collapsed ? "navbar--collapsed" : ""}`}>
       <h2 className="navbar__title">{title}</h2>
       <div className="navbar__right">
+        <button
+          className="btn btn--ghost btn--icon"
+          onClick={toggleTheme}
+          title={
+            theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"
+          }
+        >
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
         <span className="navbar__greeting">
           Halo, <strong>{displayName}</strong>
         </span>

@@ -11,6 +11,9 @@ import {
   Phone,
   MessageCircle,
   Loader2,
+  PhoneOff,
+  Plus,
+  Edit3,
 } from "lucide-react";
 import api, {
   getErrorMessage,
@@ -22,9 +25,6 @@ import LoadingSpinner from "../components/ui/LoadingSpinner";
 import ConfirmModal from "../components/ui/ConfirmModal";
 import type { CleanLead, UpdateLeadPayload } from "../types";
 
-// ─── Helpers ──────────────────────────────────────────────
-
-/** Parse rating — API returns string like "4.30" */
 const parseRating = (r: string | number | undefined): number => {
   if (r === undefined || r === null) return 0;
   const n = typeof r === "string" ? parseFloat(r) : r;
@@ -40,24 +40,17 @@ const getLeadName = (lead: CleanLead): string =>
 const getLeadAddress = (lead: CleanLead): string =>
   lead.format_address?.formatted_address ?? lead.address ?? "-";
 
-/** Get phone number from nested formatted_phone_number object */
 const getLeadPhone = (lead: CleanLead): string | null =>
   lead.formatted_phone_number?.formatted_phone_number ?? null;
 
-/** Get WA link from other_data */
 const getWaLink = (lead: CleanLead): string | null =>
   lead.other_data?.wa_link ?? null;
 
-const getLeadTypes = (lead: CleanLead): string =>
-  lead.categorical ?? lead.types ?? "";
-
 const getLeadKey = (lead: CleanLead): string => lead.id ?? lead.uuid ?? "";
 
-/** Check if lead has been enriched (has phone data or is_wa_active != checking) */
 const isEnriched = (lead: CleanLead): boolean =>
   lead.is_wa_active !== "checking" && lead.is_wa_active !== undefined;
 
-/** Map WA status string to display */
 const waStatusConfig = (status: string | undefined) => {
   switch (status) {
     case "active":
@@ -69,14 +62,11 @@ const waStatusConfig = (status: string | undefined) => {
   }
 };
 
-/** Map propose status */
 const proposeStatusLabel = (status: string | undefined): string => {
-  if (status === "yes" || status === "true") return "Sudah Propose";
-  if (status === "pending") return "Pending";
-  return "Belum";
+  if (status === "propose") return "Propose";
+  if (status === "reject") return "Reject";
+  return "Checking";
 };
-
-// ─── Component ────────────────────────────────────────────
 
 export default function LeadsPage() {
   const queryClient = useQueryClient();
@@ -87,9 +77,10 @@ export default function LeadsPage() {
   const [proposeFilter, setProposeFilter] = useState("all");
   const [deleteTarget, setDeleteTarget] = useState<CleanLead | null>(null);
   const [viewLead, setViewLead] = useState<CleanLead | null>(null);
+  const [noteLead, setNoteLead] = useState<CleanLead | null>(null);
+  const [noteText, setNoteText] = useState("");
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
 
-  // Wajib 8: GET /response_clean/
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["leads"],
     queryFn: async () => {
@@ -98,7 +89,6 @@ export default function LeadsPage() {
     },
   });
 
-  // Wajib 4: GET /response_clean/place/{{place_id}} — detail lead
   const { data: detailLead, isLoading: detailLoading } = useQuery({
     queryKey: ["lead-detail", viewLead?.place_id],
     queryFn: async () => {
@@ -110,7 +100,6 @@ export default function LeadsPage() {
     enabled: !!viewLead?.place_id,
   });
 
-  // Wajib 3: PATCH /response_clean/place/{{place_id}}
   const updateMutation = useMutation({
     mutationFn: async ({
       lead,
@@ -120,7 +109,13 @@ export default function LeadsPage() {
       payload: UpdateLeadPayload;
     }) => {
       if (!lead.place_id) throw new Error("place_id tidak ditemukan");
-      await api.patch(`/response_clean/place/${lead.place_id}`, payload);
+      const fullPayload: UpdateLeadPayload = {
+        is_wa_active: lead.is_wa_active ?? "checking",
+        is_propose: lead.is_propose ?? "checking",
+        description: lead.description ?? "",
+        ...payload,
+      };
+      await api.patch(`/response_clean/place/${lead.place_id}`, fullPayload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
@@ -130,7 +125,6 @@ export default function LeadsPage() {
       toast.error(getErrorMessage(err, "Gagal memperbarui data")),
   });
 
-  // Wajib 6: DELETE /response_clean/place/{{place_id}}
   const deleteMutation = useMutation({
     mutationFn: (lead: CleanLead) => {
       if (!lead.place_id) throw new Error("place_id tidak ditemukan");
@@ -144,7 +138,6 @@ export default function LeadsPage() {
     onError: (err) => toast.error(getErrorMessage(err, "Gagal menghapus")),
   });
 
-  // Tahap 2: PUT /response_clean/detail/{{place_id}} — Enrichment (Cari Kontak)
   const enrichMutation = useMutation({
     mutationFn: async (lead: CleanLead) => {
       if (!lead.place_id) throw new Error("place_id tidak ditemukan");
@@ -180,7 +173,6 @@ export default function LeadsPage() {
     [updateMutation],
   );
 
-  // Wajib 5: Export CSV (Admin only)
   const handleExport = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -204,7 +196,6 @@ export default function LeadsPage() {
     }
   };
 
-  // ─── Stats Summary ───────────────────────────────────────
   const stats = useMemo(() => {
     let waActive = 0;
     let waChecking = 0;
@@ -224,7 +215,6 @@ export default function LeadsPage() {
     return { waActive, waChecking, waNonActive, proposed, withPhone };
   }, [leads]);
 
-  // ─── Filtering ────────────────────────────────────────────
   const filtered = leads.filter((lead) => {
     const term = searchTerm.toLowerCase();
     const phone = getLeadPhone(lead) ?? "";
@@ -251,17 +241,15 @@ export default function LeadsPage() {
     const prop = lead.is_propose;
     const matchPropose =
       proposeFilter === "all" ||
-      (proposeFilter === "yes" && (prop === "yes" || prop === "true")) ||
-      (proposeFilter === "no" &&
-        (!prop || prop === "no" || prop === "false" || prop === "checking")) ||
-      (proposeFilter === "pending" && prop === "pending");
+      (proposeFilter === "checking" && (!prop || prop === "checking")) ||
+      (proposeFilter === "propose" && prop === "propose") ||
+      (proposeFilter === "reject" && prop === "reject");
 
     return matchSearch && matchRating && matchWa && matchPropose;
   });
 
   if (isLoading) return <LoadingSpinner size="lg" fullPage />;
 
-  // Use fetched detail or selected lead for modal
   const displayLead = detailLead ?? viewLead;
 
   return (
@@ -424,10 +412,10 @@ export default function LeadsPage() {
             value={proposeFilter}
             onChange={(e) => setProposeFilter(e.target.value)}
           >
-            <option value="all">Semua Propose</option>
-            <option value="yes">Sudah Propose</option>
-            <option value="pending">Pending</option>
-            <option value="no">Belum Propose</option>
+            <option value="all">Semua Status</option>
+            <option value="checking">⏳ Checking</option>
+            <option value="propose">✅ Propose</option>
+            <option value="reject">❌ Reject</option>
           </select>
         </div>
 
@@ -477,18 +465,14 @@ export default function LeadsPage() {
                     <td>
                       <strong
                         className="text-truncate"
-                        style={{ maxWidth: "160px", display: "block" }}
+                        style={{
+                          maxWidth: "180px",
+                          display: "block",
+                          fontSize: "var(--fs-xs)",
+                        }}
                       >
                         {getLeadName(lead)}
                       </strong>
-                      <span
-                        style={{
-                          fontSize: "var(--fs-xs)",
-                          color: "var(--text-tertiary)",
-                        }}
-                      >
-                        {getLeadTypes(lead)}
-                      </span>
                     </td>
 
                     {/* Alamat */}
@@ -496,9 +480,9 @@ export default function LeadsPage() {
                       <span
                         className="text-truncate"
                         style={{
-                          maxWidth: "180px",
+                          maxWidth: "140px",
                           display: "block",
-                          fontSize: "var(--fs-xs)",
+                          fontSize: "11px",
                           color: "var(--text-secondary)",
                         }}
                       >
@@ -508,13 +492,16 @@ export default function LeadsPage() {
 
                     {/* Rating */}
                     <td>
-                      <span className={`rating ${getRatingClass(rating)}`}>
+                      <span
+                        className={`rating ${getRatingClass(rating)}`}
+                        style={{ fontSize: "11px" }}
+                      >
                         ★ {rating > 0 ? rating.toFixed(1) : "-"}
                       </span>
                     </td>
 
                     {/* Telepon */}
-                    <td style={{ fontSize: "var(--fs-xs)" }}>
+                    <td style={{ fontSize: "11px" }}>
                       {phone ?? (
                         <span style={{ color: "var(--text-tertiary)" }}>—</span>
                       )}
@@ -522,7 +509,10 @@ export default function LeadsPage() {
 
                     {/* Status WA — read-only badge from backend */}
                     <td>
-                      <span className={`badge ${waStatus.badge}`}>
+                      <span
+                        className={`badge ${waStatus.badge}`}
+                        style={{ fontSize: "11px", padding: "2px 6px" }}
+                      >
                         {waStatus.icon} {waStatus.label}
                       </span>
                     </td>
@@ -535,34 +525,67 @@ export default function LeadsPage() {
                         onChange={(e) =>
                           handleUpdate(lead, { is_propose: e.target.value })
                         }
-                        style={{ fontSize: "var(--fs-xs)", minWidth: "100px" }}
+                        style={{
+                          fontSize: "11px",
+                          minWidth: "90px",
+                          padding: "2px 4px",
+                        }}
                       >
                         <option value="checking">Checking</option>
-                        <option value="no">Belum</option>
-                        <option value="pending">Pending</option>
-                        <option value="yes">Sudah</option>
+                        <option value="propose">Propose</option>
+                        <option value="reject">Reject</option>
                       </select>
                     </td>
 
                     {/* Catatan */}
-                    <td>
-                      <input
-                        type="text"
-                        className="form-input"
-                        style={{
-                          fontSize: "var(--fs-xs)",
-                          padding: "var(--space-1) var(--space-2)",
-                          minWidth: "120px",
-                        }}
-                        placeholder="Tambah catatan..."
-                        defaultValue={lead.description ?? ""}
-                        onBlur={(e) => {
-                          if (e.target.value !== (lead.description ?? ""))
-                            handleUpdate(lead, {
-                              description: e.target.value,
-                            });
-                        }}
-                      />
+                    <td style={{ maxWidth: "200px" }}>
+                      {!lead.description ? (
+                        <button
+                          className="btn btn--outline btn--sm"
+                          onClick={() => {
+                            setNoteLead(lead);
+                            setNoteText("");
+                          }}
+                          style={{
+                            fontSize: "var(--fs-xs)",
+                            padding: "var(--space-1) var(--space-2)",
+                          }}
+                          title="Tambah Catatan"
+                        >
+                          <Plus size={14} /> Tambah
+                        </button>
+                      ) : (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "var(--space-2)",
+                            cursor: "pointer",
+                            padding: "var(--space-1)",
+                            borderRadius: "var(--radius-sm)",
+                            background: "var(--bg-secondary)",
+                          }}
+                          onClick={() => {
+                            setNoteLead(lead);
+                            setNoteText(lead.description ?? "");
+                          }}
+                          title="Edit Catatan"
+                        >
+                          <span
+                            className="text-truncate"
+                            style={{ fontSize: "var(--fs-xs)", flex: 1 }}
+                          >
+                            {lead.description}
+                          </span>
+                          <Edit3
+                            size={12}
+                            style={{
+                              color: "var(--text-tertiary)",
+                              flexShrink: 0,
+                            }}
+                          />
+                        </div>
+                      )}
                     </td>
 
                     {/* Aksi */}
@@ -597,17 +620,40 @@ export default function LeadsPage() {
                           </button>
                         )}
 
-                        {/* Chat WA — only if wa_link exists */}
-                        {waLink && (
-                          <a
-                            href={waLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn--success btn--sm"
-                            title="Chat via WhatsApp"
-                          >
-                            <MessageCircle size={14} /> Chat WA
-                          </a>
+                        {/* Chat WA — only if wa_link exists and wa is not marked non-active */}
+                        {waLink && lead.is_wa_active !== "non-active" && (
+                          <div style={{ display: "flex" }}>
+                            <a
+                              href={waLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn--success btn--sm"
+                              title="Chat via WhatsApp"
+                              style={{
+                                borderTopRightRadius: 0,
+                                borderBottomRightRadius: 0,
+                              }}
+                            >
+                              <MessageCircle size={14} /> Chat WA
+                            </a>
+                            <button
+                              className="btn btn--danger btn--sm"
+                              style={{
+                                padding: "0 var(--space-2)",
+                                borderTopLeftRadius: 0,
+                                borderBottomLeftRadius: 0,
+                                opacity: 0.9,
+                              }}
+                              title="Tandai WA Tidak Aktif"
+                              onClick={() =>
+                                handleUpdate(lead, {
+                                  is_wa_active: "non-active",
+                                })
+                              }
+                            >
+                              <PhoneOff size={14} />
+                            </button>
+                          </div>
                         )}
 
                         <button
@@ -615,7 +661,7 @@ export default function LeadsPage() {
                           title="Detail"
                           onClick={() => setViewLead(lead)}
                         >
-                          <Eye size={16} />
+                          <Eye size={14} />
                         </button>
                         <button
                           className="btn btn--ghost btn--icon"
@@ -623,7 +669,7 @@ export default function LeadsPage() {
                           onClick={() => setDeleteTarget(lead)}
                         >
                           <Trash2
-                            size={16}
+                            size={14}
                             style={{ color: "var(--accent-danger)" }}
                           />
                         </button>
@@ -660,9 +706,7 @@ export default function LeadsPage() {
                       ["Nama Bisnis", getLeadName(displayLead)],
                       ["Alamat", getLeadAddress(displayLead)],
                       ["Telepon", getLeadPhone(displayLead) ?? "-"],
-                      ["Kategori", getLeadTypes(displayLead)],
                       ["Status Bisnis", displayLead.business_status],
-                      ["Place ID", displayLead.place_id],
                     ] as const
                   ).map(([label, value]) => (
                     <div className="detail-item" key={label}>
@@ -776,6 +820,55 @@ export default function LeadsPage() {
                 onClick={() => setViewLead(null)}
               >
                 Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Catatan Modal */}
+      {noteLead && (
+        <div className="modal-overlay" onClick={() => setNoteLead(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h3 className="modal__title">Catatan: {getLeadName(noteLead)}</h3>
+              <button
+                className="btn btn--ghost btn--icon"
+                onClick={() => setNoteLead(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal__body" style={{ padding: "var(--space-4)" }}>
+              <textarea
+                className="form-input"
+                style={{
+                  width: "100%",
+                  minHeight: "150px",
+                  resize: "vertical",
+                }}
+                placeholder="Ketik catatan di sini... (Misal: Klien minta dihubungi lagi besok)"
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                autoFocus
+              ></textarea>
+            </div>
+            <div className="modal__footer">
+              <button
+                className="btn btn--secondary"
+                onClick={() => setNoteLead(null)}
+              >
+                Batal
+              </button>
+              <button
+                className="btn btn--primary"
+                disabled={updateMutation.isPending}
+                onClick={() => {
+                  handleUpdate(noteLead, { description: noteText });
+                  setNoteLead(null);
+                }}
+              >
+                {updateMutation.isPending ? "Menyimpan..." : "Simpan Catatan"}
               </button>
             </div>
           </div>

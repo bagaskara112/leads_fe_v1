@@ -1,6 +1,3 @@
-// ==========================================
-// Auth Types
-// ==========================================
 export interface LoginPayload {
     email: string;
     password: string;
@@ -27,9 +24,6 @@ export interface AuthResponse {
     status: string;
 }
 
-// ==========================================
-// User Types
-// ==========================================
 export interface User {
     id: string;
     user_id?: string;
@@ -41,11 +35,6 @@ export interface User {
     created_at?: string;
 }
 
-// ==========================================
-// Raw Response (Discovery) Types
-// ==========================================
-
-/** Individual Google Place from response.results */
 export interface GooglePlaceResult {
     business_status?: string;
     formatted_address?: string;
@@ -60,7 +49,6 @@ export interface GooglePlaceResult {
     types?: string[];
 }
 
-/** Single entry from GET /response/all */
 export interface RawResponse {
     id: string;
     parent_id?: string | null;
@@ -86,9 +74,6 @@ export interface SearchHistory {
     created_at: string;
 }
 
-// ==========================================
-// Clean Lead Types (matches actual API response)
-// ==========================================
 export interface CleanLead {
     id: string;
     uuid?: string;
@@ -132,22 +117,17 @@ export interface CleanLead {
 }
 
 export interface UpdateLeadPayload {
+    is_wa_active?: string;
     is_propose?: string;
     description?: string;
 }
 
-// ==========================================
-// Stats Types
-// ==========================================
 export interface StatsData {
     total_leads: number;
     total_searches: number;
     total_users: number;
 }
 
-// ==========================================
-// API Response Wrappers
-// ==========================================
 export interface ApiResponse<T> {
     data: T;
     message?: string;

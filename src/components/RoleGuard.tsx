@@ -9,10 +9,6 @@ interface RoleGuardProps {
   fallbackPath?: string;
 }
 
-/**
- * Route guard that checks user role.
- * If the user's role doesn't match, redirects to fallbackPath (default: /dashboard).
- */
 export default function RoleGuard({
   children,
   role,

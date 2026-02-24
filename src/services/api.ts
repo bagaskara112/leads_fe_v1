@@ -7,7 +7,6 @@ const api = axios.create({
     },
 });
 
-// Request interceptor — attach JWT token
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
@@ -19,7 +18,6 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Response interceptor — handle 401 Unauthorized
 api.interceptors.response.use(
     (response) => response,
     (error) => {
@@ -32,7 +30,6 @@ api.interceptors.response.use(
     }
 );
 
-/** Extract a displayable error message from any caught error */
 export function getErrorMessage(error: unknown, fallback = 'Terjadi kesalahan'): string {
     if (error instanceof AxiosError) {
         const data = error.response?.data as Record<string, unknown> | undefined;
@@ -43,7 +40,6 @@ export function getErrorMessage(error: unknown, fallback = 'Terjadi kesalahan'):
     return fallback;
 }
 
-/** Unwrap API response — handles both `data[]` and `{ data: [] }` formats */
 export function unwrapArray<T>(data: unknown): T[] {
     if (Array.isArray(data)) return data as T[];
     if (data && typeof data === 'object' && 'data' in data) {
@@ -53,11 +49,6 @@ export function unwrapArray<T>(data: unknown): T[] {
     return [];
 }
 
-/**
- * Get user role from JWT token stored in localStorage.
- * Decodes the JWT payload (base64) without verification.
- * Returns 'user' as default if token is missing/invalid.
- */
 export function getUserRole(): 'admin' | 'user' {
     try {
         const token = localStorage.getItem('token');

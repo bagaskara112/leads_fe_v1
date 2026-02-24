@@ -15,7 +15,7 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
 
-  const title = pageTitles[location.pathname] ?? "Pemetaan";
+  const title = pageTitles[location.pathname] ?? "ScoutLeads";
 
   return (
     <div className="layout">

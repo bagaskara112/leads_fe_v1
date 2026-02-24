@@ -7,10 +7,9 @@ export function useUser() {
         queryKey: ['user', 'me'],
         queryFn: async () => {
             const { data } = await api.get('/auth/me');
-            // Handle nested response
             return data.data ?? data;
         },
         retry: false,
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        staleTime: 5 * 60 * 1000,
     });
 }

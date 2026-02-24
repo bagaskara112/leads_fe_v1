@@ -28,7 +28,6 @@ export default function UsersPage() {
   const { data: currentUser } = useUser();
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
 
-  // All hooks must be called before any early return
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
@@ -48,7 +47,6 @@ export default function UsersPage() {
     onError: (err) => toast.error(getErrorMessage(err, "Gagal menghapus user")),
   });
 
-  // Check admin access AFTER all hooks
   if (currentUser && currentUser.role !== "admin") {
     return (
       <div className="empty-state">

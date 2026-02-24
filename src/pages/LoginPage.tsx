@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { MapPin, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import api, { getErrorMessage } from "../services/api";
 import toast from "react-hot-toast";
 
@@ -48,10 +48,12 @@ export default function LoginPage() {
       <div className="auth-bg" />
       <div className="auth-card">
         <div className="auth-card__logo">
-          <div className="auth-card__logo-icon">
-            <MapPin size={22} />
-          </div>
-          <span className="auth-card__logo-text">Pemetaan</span>
+          <img
+            src="/logo.png"
+            alt="ScoutLeads"
+            style={{ width: 36, height: 36, borderRadius: 8 }}
+          />
+          <span className="auth-card__logo-text">ScoutLeads</span>
         </div>
 
         <h1 className="auth-card__title">Selamat Datang</h1>
