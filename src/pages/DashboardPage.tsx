@@ -124,7 +124,7 @@ export default function DashboardPage() {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/response_clean/export/csv`,
+        `${import.meta.env.VITE_API_URL}response_clean/export/csv`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!response.ok) throw new Error("Export gagal");
