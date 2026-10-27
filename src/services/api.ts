@@ -1,7 +1,15 @@
 import axios, { AxiosError } from 'axios';
 
+const isDev = import.meta.env.DEV;
+
+// In local dev, use relative proxy path '/api/v1' to eliminate CORS preflight on localhost
+// In production, use the configured backend URL
+const baseURL = isDev
+    ? '/api/v1'
+    : (import.meta.env.VITE_API_URL || 'https://pemetaan-be-backup.vercel.app/api/v1').replace(/\/+$/, '');
+
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL,
+    baseURL,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -13,6 +21,15 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+
+        // In production: if method is PATCH, route through our serverless bridge
+        // to bypass backend CORS preflight restrictions
+        if (!isDev && config.method?.toLowerCase() === 'patch' && config.url) {
+            const originalUrl = config.url.startsWith('/') ? config.url : `/${config.url}`;
+            config.baseURL = '';
+            config.url = `/api/patch-bridge?endpoint=${encodeURIComponent(originalUrl)}`;
+        }
+
         return config;
     },
     (error) => Promise.reject(error)
